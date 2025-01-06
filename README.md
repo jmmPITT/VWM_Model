@@ -11,5 +11,5 @@ We present a neural network model of visual attention (NNMVA) that integrates bi
 ## Setup and Usage
 1. Generate VAE training data by running 'TaskEnvGenData.py'
 2. Train VAE by running 'VAEmain.py' 
-3. Train Agent by running 'main.py'
+3. Train Agent by running 'main.py' in NNMVWM folder
 
