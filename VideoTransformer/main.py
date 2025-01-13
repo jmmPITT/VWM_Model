@@ -1,7 +1,7 @@
 
 from MATenv import *
 from agent_planner import Agent as AgentPlanner
-from network_sensor2 import *
+from VidTFNET import *
 from VAENet import VAE
 import gymnasium
 import numpy as np
