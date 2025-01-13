@@ -96,6 +96,10 @@ class Trainer:
             epoch_loss = 0.0
             correct = 0
             total = 0
+            dff = 1024
+            patch_num = 4
+            patch_dim = 140
+            T_end = 7
 
             for batch_idx, (observations, labels) in enumerate(self.dataloader):
                 # observations shape: (batch_size, T_end*4, 25^2)
@@ -113,18 +117,18 @@ class Trainer:
                 self.model.optimizer.zero_grad()
                 total_loss = 0
 
-                C = torch.zeros(batch_size, 4, 1024).to(
+                C = torch.zeros(batch_size, patch_num, dff).to(
                     self.device)
-                M = torch.zeros(batch_size, 4, 1024).to(
+                M = torch.zeros(batch_size, patch_num, dff).to(
                     self.device)
-                H = torch.zeros(batch_size, 4, 1024).to(
+                H = torch.zeros(batch_size, patch_num, dff).to(
                     self.device)
-                N = torch.zeros(batch_size, 4, 1024).to(
+                N = torch.zeros(batch_size, patch_num, dff).to(
                     self.device)
 
 
-                for i in range(7):
-                    obs_i = observations[:,i,:,:].view(-1,4,140)
+                for i in range(T_end):
+                    obs_i = observations[:,i,:,:].view(-1,patch_num,patch_dim)
                     lab_i = labels[:, i, 0].view(-1,1)
                     # Forward pass
                     outputs, C, M, H, N, A  = self.model(obs_i, C, M, H, N )  # shape: (batch_size, 1)

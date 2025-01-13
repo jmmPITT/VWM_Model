@@ -2,7 +2,7 @@ import os
 import torch as T
 import torch.nn.functional as F
 import numpy as np
-from network_sensor2 import *
+from VidTFNET import *
 from buffer import *
 import os
 import torch as T
