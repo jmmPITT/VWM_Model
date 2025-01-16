@@ -237,10 +237,6 @@ class ChangeDetectionEnv(gym.Env):
         reward = 0
         done = False
 
-        # if self.t == self.change_time and self.change_true == 1:
-        #     self.orientations[
-        #         self.change_index] += self.orientation_change  # Apply orientation change to the selected Gabor filter
-
         observation = self._next_observation()
 
         if action == 1 and self.t < self.change_time:
@@ -278,18 +274,18 @@ class ChangeDetectionEnv(gym.Env):
         pass
 
 # Running a trial
-env = ChangeDetectionEnv()
-observation = env.reset()
-env.cue_position = 'left'
-env.proportion = 1.0
-env.change_true = 1
-env.change_index = 0
-env.orientation_change = 180
-for t in range(env.T):
-    env.render()
-    action = 0
-    observation, reward, done, info = env.step(action)
-    if done:
-        break
+# env = ChangeDetectionEnv()
+# observation = env.reset()
+# env.cue_position = 'left'
+# env.proportion = 1.0
+# env.change_true = 1
+# env.change_index = 0
+# env.orientation_change = 180
+# for t in range(env.T):
+#     env.render()
+#     action = 0
+#     observation, reward, done, info = env.step(action)
+#     if done:
+#         break
 
-env.close()
+# env.close()
