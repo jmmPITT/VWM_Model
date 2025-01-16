@@ -18,17 +18,11 @@ class ReplayBuffer():
         self.reward_memory = np.zeros(self.mem_size)
         self.terminal_memory = np.zeros(self.mem_size, dtype=bool)
         self.time = np.zeros(self.mem_size, dtype=np.int32)
-        self.cue = np.zeros((self.mem_size, 4))
-        self.target = np.zeros((self.mem_size, 5))
-
-        # self.transformer_sequence_memory = np.zeros((self.mem_size, input_shape*7*4*2))
-        # self.transformer_sequence_memory_ = np.zeros((self.mem_size, input_shape*7*4*2))
-
 
         # Initialize priority memory to store the priorities of each experience
         self.priority_memory = np.zeros(self.mem_size)
 
-    def store_transition(self, state, mask, action, reward, state_, mask_, done, t, cue, target):
+    def store_transition(self, state, mask, action, reward, state_, mask_, done, t):
         # Determine the index where the new transition will be stored
         index = self.mem_cntr % self.mem_size
 
@@ -41,8 +35,6 @@ class ReplayBuffer():
         self.next_mask_memory[index] = mask_
         self.terminal_memory[index] = done
         self.time[index] = t
-        self.cue[index] = cue
-        self.target[index] = target
 
 
         # Assign high priority for the new transition
@@ -81,11 +73,9 @@ class ReplayBuffer():
         masks_ = self.next_mask_memory[indices]
         dones = self.terminal_memory[indices]
         ts = self.time[indices]
-        cues = self.cue[indices]
-        target = self.target[indices]
 
         # Return the sampled experiences along with the corresponding indices and importance-sampling weights
-        return states, masks, actions, rewards, states_, masks_, dones, ts, cues, target, indices, weights
+        return states, masks, actions, rewards, states_, masks_, dones, ts, indices, weights
 
     def update_priorities(self, indices, errors):
         # Flatten or squeeze the errors array to make it one-dimensional

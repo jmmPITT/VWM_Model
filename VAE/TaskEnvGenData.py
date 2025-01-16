@@ -273,8 +273,6 @@ while trial < 100000:
         action = 0
         observation, observationClean, reward, done, info = env.step(action)
 
-        # print(observation.shape)
-
         dataNoise[trial, env.t, 0, :, :, 0] = observation[0:25, 0:25]
         dataNoise[trial, env.t, 1, :, :, 0] = observation[25:50, 0:25]
         dataNoise[trial, env.t, 2, :, :, 0] = observation[0:25, 25:50]

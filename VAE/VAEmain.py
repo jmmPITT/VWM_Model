@@ -39,5 +39,5 @@ model.to(device)
 trainer = VAERunner(model, noisy_train_data, clean_train_data, batch_size=100, learning_rate=1e-4)
 
 # Train the model
-trainer.train(epochs=100)
+trainer.train(epochs=50)
 
