@@ -40,7 +40,7 @@ class VAERunner:
         return recon_loss + kl_div
 
     def train(self, epochs):
-        self.model.train()
+        self.model.test()
         for epoch in range(epochs):
             overall_loss = 0
             for batch_idx, (noisy, clean) in enumerate(self.train_loader):
