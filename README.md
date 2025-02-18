@@ -13,3 +13,4 @@ We present a neural network model of visual attention (NNMVA) that integrates bi
 2. Train VAE by running 'VAEmain.py' 
 3. Train Agent by running 'main.py' in NNMVWM folder
 
+https://arxiv.org/abs/2502.10955
