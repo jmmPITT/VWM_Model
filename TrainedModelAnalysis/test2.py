@@ -90,43 +90,50 @@ class CustomLSTMCell(nn.Module):
         return C_t, M_t, H_t, N_t
 
 class TransformerBlock(nn.Module):
+    """Transformer encoder block with self-attention and LSTM memory mechanism.
+    
+    This block implements a modified transformer architecture with:
+    1. Multi-head self-attention with context-dependent modulation
+    2. Integration with a custom LSTM cell for maintaining working memory
+    3. Skip connections and layer normalization
+    """
     def __init__(self, beta, input_dims=32, hidden_dim=128, fc1_dims=64, fc2_dims=32, n_actions=4,
                  name='transformer', chkpt_dir='td3_MAT'):
         super(TransformerBlock, self).__init__()
-        self.input_dims = (128 + 4 + 8)
+        # Input and output dimensions
+        self.input_dims = (128 + 4 + 8)  # VAE embedding + position encoding + temporal encoding
         self.hidden_dim = hidden_dim
         self.fc1_dims = fc1_dims
         self.fc2_dims = fc2_dims
-        self.patch_length = 4
-        self.seq_length = 8
+        self.patch_length = 4      # Number of visual patches (spatial tokens)
+        self.seq_length = 8        # Maximum sequence length for temporal processing
         self.n_actions = n_actions
-        self.d_model = self.input_dims
-        self.num_heads = 1
-        self.dff = 1024
-        self.dropout = 0.01
+        
+        # Self-attention parameters
+        self.d_model = self.input_dims 
+        self.num_heads = 1         # Single attention head
+        self.dff = 1024            # Dimension of feed-forward network
+        self.dropout = 0.01        # Dropout rate
+        self.d_k = self.d_model // self.num_heads  # Dimension per head
 
-        self.d_model = self.d_model
-        self.num_heads = self.num_heads
-        self.d_k = self.d_model // self.num_heads
-
-        ### query, key, and value weights ###
+        # Query, key, and value projection matrices
         self.W_q = nn.Linear(self.d_model, self.d_k*self.num_heads)
         self.W_k = nn.Linear(self.d_model, self.d_k*self.num_heads)
         self.W_v = nn.Linear(self.d_model, self.d_k*self.num_heads)
 
-        self.W_Cq = nn.Linear(self.dff, self.d_k * self.num_heads)
-        self.W_Ck = nn.Linear(self.dff, self.d_k * self.num_heads)
-        self.W_Cv = nn.Linear(self.dff, self.d_k * self.num_heads)
-        # self.fc = nn.Linear(self.d_model, self.d_k)
+        # Context-dependent attention modulation
+        self.W_Cq = nn.Linear(self.dff, self.d_k * self.num_heads)  # Context for query
+        self.W_Ck = nn.Linear(self.dff, self.d_k * self.num_heads)  # Context for key
+        self.W_Cv = nn.Linear(self.dff, self.d_k * self.num_heads)  # Context for value
 
-        ### Position wise feed forward layers ###
+        # Feed-forward network after attention
         self.linear1 = nn.Linear(self.num_heads * self.d_k, self.dff)
         self.linear2 = nn.Linear(self.dff, self.d_model)
         self.dropout1 = nn.Dropout(self.dropout*2)
 
-        ### norms and second dropout layer ###
-        self.norm1 = nn.LayerNorm(self.d_model)
-        self.norm2 = nn.LayerNorm(self.d_model)
+        # Layer normalization and dropout
+        self.norm1 = nn.LayerNorm(self.d_model)  # Normalization before LSTM
+        self.norm2 = nn.LayerNorm(self.d_model)  # Normalization after feed-forward
         self.dropout2 = nn.Dropout(self.dropout)
 
 
@@ -141,67 +148,66 @@ class TransformerBlock(nn.Module):
         self.to(self.device)
 
     def forward(self, state, m, kin):
+        """Forward pass through the transformer block.
+        
+        Args:
+            state: Input state tensor
+            m: Mask tensor for conditional processing
+            kin: Additional modulation parameter for attention
+            
+        Returns:
+            tuple: (hidden_state, attention_weights)
+        """
+        # Reshape input state and mask
         state = state.view(-1, self.seq_length, self.patch_length, self.input_dims)
         m = m.view(-1, self.seq_length, self.patch_length, 1)
-
         batch_size = state.shape[0]
-
-        C = torch.zeros(batch_size, self.patch_length, self.dff).to(self.device)
-        M = torch.zeros(batch_size, self.patch_length, self.dff).to(self.device)
-        H = torch.zeros(batch_size, self.patch_length, self.dff).to(self.device)
-        N = torch.zeros(batch_size, self.patch_length, self.dff).to(self.device)
-
-        # Create a tensor of zeros with size [batch_size, input_dims]
-        src = torch.zeros(batch_size, self.seq_length, self.patch_length, self.input_dims*2).to(self.device)
-        # Initialize an empty list to collect the tensors
-        src_list = []
+        
+        # Initialize LSTM cell states
+        C = torch.zeros(batch_size, self.patch_length, self.dff).to(self.device)  # Cell state
+        M = torch.zeros(batch_size, self.patch_length, self.dff).to(self.device)  # Max gate values
+        H = torch.zeros(batch_size, self.patch_length, self.dff).to(self.device)  # Hidden state
+        N = torch.zeros(batch_size, self.patch_length, self.dff).to(self.device)  # Normalization factor
+        
+        # Initialize list to collect attention matrices
         A_list = []
-
+        
+        # Process each timestep in the sequence
         for i in range(self.seq_length):
-
-            ### mask values to 0 ###
+            # Extract state at current timestep
             state_i = state[:, i, :, :].view(batch_size, self.patch_length, self.input_dims)
-
-            ### Construct query, key, and value matrices for each head ###
-            ### split among heads ###
-            ### Construct query, key, and value matrices for each head ###
-            ### split among heads ###
+            
+            # Compute context-modulated attention components
+            # Multiply query/key/value projections by context-dependent factors from hidden state
             q = self.W_q(state_i).view(batch_size, -1, self.num_heads, self.d_k) * self.W_Cq(H).view(batch_size, -1, self.num_heads, self.d_k)
             k = self.W_k(state_i).view(batch_size, -1, self.num_heads, self.d_k) * self.W_Ck(H).view(batch_size, -1, self.num_heads, self.d_k)
             v = self.W_v(state_i).view(batch_size, -1, self.num_heads, self.d_k) * self.W_Cv(H).view(batch_size, -1, self.num_heads, self.d_k)
+            
+            # Reshape for attention calculation
             q, k, v = [x.transpose(1, 2) for x in (q, k, v)]  # [batch_size, num_heads, seq_len, d_k]
-
-            ### compute attention*values ###
+            
+            # Compute attention
             attn_values, A = self.calculate_attention(q, k, v, i, kin)
             attn_values = attn_values.transpose(1, 2).contiguous().view(batch_size, -1, self.num_heads * self.d_k)
-
-            ### Feedforward and layer norm layers ###
-            # Z1 = torch.cat((state_i, self.dropout1(attn_values)), dim=-1)
-            if i == 1:
-                Z1 = state_i + self.dropout1(attn_values)
-            else:
-                Z1 = state_i + self.dropout1(attn_values)
-            # Z1 = state_i + self.dropout1(attn_values)
-
+            
+            # Residual connection and dropout
+            Z1 = state_i + self.dropout1(attn_values)
+            
+            # Layer normalization
             Z2 = self.norm1(Z1)
-            # Z3 = F.relu(self.linear1(Z2))
-            # Z4 = self.linear2(Z3)
-            # Z5 = self.norm2(Z2 + self.dropout2(Z4))
-            # src[:, i, :, :] += Z5
+            
+            # Extract mask for current timestep
             m_i = m[:,i,:,:].view(-1, self.patch_length, 1)
-
+            
+            # Update LSTM cell states
             C, M, H, N = self.LSTM(Z2, C, M, H, N, m_i)
-
-            # src_list.append(src)
+            
+            # Store attention weights
             A_list.append(A)
-
-            # print('TRANSFORM!!!!',src.shape)
-        # Concatenate all tensors in the list along a new dimension (1) to get [batch, seq_length, patch_length, input_dims]
-        # src_tensor = torch.stack(src_list, dim=1)
+        
+        # Stack attention matrices from all timesteps
         A_tensor = torch.stack(A_list, dim=1)
-
-        # print('src_tensor',src_tensor.shape)
-
+        
         return H, A_tensor
 
     def calculate_attention(self, q, k, v, t, kin):
@@ -233,55 +239,50 @@ class TransformerBlock(nn.Module):
         return torch.matmul(A, v), A
 
 class TransformerNetwork(nn.Module):
+    """Main transformer network for visual attention processing.
+    
+    This network processes visual inputs through a transformer architecture
+    to model visual attention and working memory.
+    """
     def __init__(self, beta, input_dims=32, hidden_dim=128, fc1_dims=64, fc2_dims=32, n_actions=4,
                  name='transformer', chkpt_dir='td3_MAT'):
         super(TransformerNetwork, self).__init__()
-        self.input_dims = (128 + 4 + 8)
+        # Architecture dimensions
+        self.input_dims = (128 + 4 + 8)  # VAE embedding + position encoding + temporal encoding
         self.hidden_dim = hidden_dim
         self.fc1_dims = fc1_dims
         self.fc2_dims = fc2_dims
-        self.patch_length = 4
-        self.seq_length = 8
+        self.patch_length = 4       # Number of spatial patches
+        self.seq_length = 8         # Sequence length for temporal processing
         self.n_actions = n_actions
+        
+        # Checkpoint parameters
         self.name = name
         self.checkpoint_dir = chkpt_dir
         self.checkpoint_file = name + '_td3'
+        
+        # Transformer parameters
         self.d_model = self.input_dims
         self.num_heads = 1
         self.dff = 1024
         self.dropout = 0.01
-        # self.embed_dim = 128
 
-        # Embedding Generator
+        # Input projection and normalization
+        # These layers process the raw input and generate an embedding
         self.fc_state_projection = nn.Linear(self.input_dims, self.input_dims)
         self.ln_state_projection = nn.LayerNorm(self.input_dims)
-
         self.fc2_state_projection = nn.Linear(self.input_dims, self.input_dims)
         self.ln2_state_projection = nn.LayerNorm(self.input_dims)
 
-        # self.fc3_state_projection = nn.Linear(self.input_dims, self.input_dims)
-
-        # GRU Layer
-        # self.LSTM = nn.LSTM(input_size=input_dims*2, hidden_size=self.input_dims, num_layers=1, batch_first=True)
-
-        self.transformer_block1 = TransformerBlock(beta, input_dims=128, hidden_dim=self.hidden_dim, fc1_dims=self.fc1_dims, fc2_dims=self.fc2_dims, n_actions=self.n_actions)
-        # self.transformer_block2 = TransformerBlock(beta, input_dims=128, hidden_dim=self.hidden_dim, fc1_dims=self.fc1_dims, fc2_dims=self.fc2_dims, n_actions=self.n_actions)
-        # self.transformer_block3 = TransformerBlock(beta, input_dims=self.input_dims, hidden_dim=self.hidden_dim, fc1_dims=self.fc1_dims, fc2_dims=self.fc2_dims, n_actions=self.n_actions)
-
-        ### cue predictor ###
-        # self.cue_predictor = nn.Linear(self.input_dims*self.seq_length, 4)
-        #
-        # ### next action predictor ###
-        # self.action_predictor = nn.Linear(self.input_dims*self.seq_length, 3)
-        #
-        # ### reward predictor ###
-        # self.reward_predictor = nn.Linear(self.input_dims * self.seq_length, 1)
-
-        ### target predictor ###
-        # self.fc1_target_predictor = nn.Linear(self.input_dims * self.seq_length, self.fc1_dims)
-        # self.ln1_target_predictor = nn.LayerNorm(self.fc1_dims)
-        # self.fc2_target_predictor = nn.Linear(self.fc1_dims, 5)
-        # self.ln2_target_predictor = nn.LayerNorm(self.fc2_dims)
+        # Transformer encoder block
+        self.transformer_block1 = TransformerBlock(
+            beta, 
+            input_dims=128, 
+            hidden_dim=self.hidden_dim, 
+            fc1_dims=self.fc1_dims, 
+            fc2_dims=self.fc2_dims, 
+            n_actions=self.n_actions
+        )
 
         self.optimizer = optim.Adam(self.parameters(), lr=beta, betas=(0.9, 0.99), eps=1e-8, weight_decay=1e-6)
         self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
@@ -290,43 +291,41 @@ class TransformerNetwork(nn.Module):
 
 
     def forward(self, state, t, m, k):
-        # print('STATE!!!', state.shape)
+        """Forward pass through the transformer network.
+        
+        Args:
+            state: Input state tensor containing visual features
+            t: Current timestep
+            m: Mask tensor for conditional processing
+            k: Attention modulation parameter
+            
+        Returns:
+            tuple: (hidden_state, attention_weights)
+        """
+        # Reshape state to [batch, sequence, patch, features]
         state = state.view(-1, self.seq_length, self.patch_length, self.input_dims)
-
         batch_size = state.shape[0]
-
+        
+        # Flatten for initial processing
         state = state.view(batch_size * self.seq_length * self.patch_length, self.input_dims)
-
-        ### Generate Embedding ###
+        
+        # Generate embedding with residual connections
+        # First projection with ELU activation
         X = F.elu(state + self.ln_state_projection(self.fc_state_projection(state)))
+        # Second projection with layer normalization
         state = self.ln2_state_projection(state + self.fc2_state_projection(X))
-
-        # Adding Gaussian noise
-        std = 0.001  # Adjust this value as needed
-        noise = torch.randn_like(state) * std
+        
+        # Add small Gaussian noise for regularization
+        noise = torch.randn_like(state) * 0.001
         state = state + noise
-
-        # src = self.transformer_block(state, m)
-        # print(state.shape)
-        ### mask values to 0 ###
+        
+        # Reshape back to sequence format
         state = state.view(batch_size, self.seq_length, self.patch_length, self.input_dims)
-        # state = state * m.view(batch_size, self.seq_length, self.patch_length, self.input_dims)
-        # mask = (state == 0).all(dim=-1)  # Creates a mask of shape [batch_size, seq_len]
-
-        src,A1 = self.transformer_block1(state, m, k)
-        # src,A2 = self.transformer_block2(src, mask)
-        # src,A3 = self.transformer_block3(src, mask)
-
-        # cue = F.softmax(self.cue_predictor(src.view(batch_size,-1)),-1)
-        # next_action = self.action_predictor(src.view(batch_size,-1))
-        # next_reward = self.reward_predictor(src.view(batch_size,-1))
-        cue = 0
-        next_action = 0
-        next_reward = 0
-        target_pred = 0
-        target_pred = 0
-
-        return src, A1
+        
+        # Process through transformer block
+        hidden_state, attention_weights = self.transformer_block1(state, m, k)
+        
+        return hidden_state, attention_weights
 
     def save_checkpoint(self):
         print('... saving checkpoint ...')
