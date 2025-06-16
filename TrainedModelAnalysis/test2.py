@@ -232,8 +232,8 @@ class TransformerBlock(nn.Module):
         # Modulate attention at specific timesteps
         if t >= 5:
             A = A*0
-            A[:,:,:,0] = 0.9
-            A[:,:,:,3] = 0.1
+            A[:,:,:,0] = 1.0
+            A[:,:,:,3] = 0.0
             
         # Apply attention weights to values
         return torch.matmul(A, v), A

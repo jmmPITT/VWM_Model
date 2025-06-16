@@ -34,7 +34,7 @@ if __name__ == '__main__':
 
     Transformer = TransformerNetwork(0.000001, input_dims=input_dim, hidden_dim = 256, fc1_dims=256, fc2_dims=128, name='transformer1', chkpt_dir='td3_MAT').to(agent_lever.device)
 
-    encoder = load_model('vae_model.pth').to(device)
+    encoder = load_model('vae_model').to(device)
     encoder.eval()
     n_games = 500
     # best_score = env.reward_range[0]
@@ -49,8 +49,8 @@ if __name__ == '__main__':
     attn_matrix_sum = np.zeros((1, 1, 4, 4))
 
     # Experiment parameters
-    n_alphas = 70  # Number of orientation change values to test
-    linear_spaced_modulation = np.linspace(-45.0, 45.0, n_alphas)  # Range of orientation changes
+    n_alphas = 35  # Number of orientation change values to test
+    linear_spaced_modulation = np.linspace(0.0, 45.0, n_alphas)  # Range of orientation changes
     
     # Initialize results array: [miss, hit, false alarm, correct rejection, reaction time]
     choiceStats = np.zeros((n_alphas, 5))
@@ -66,7 +66,7 @@ if __name__ == '__main__':
             state = env.reset()
 
             env.cue_position = 'left'
-            env.proportion = 1.0
+            env.proportion = 0.25
             # Always set change to true for this experiment
             env.change_true = 1
             # env.change_true = 1
@@ -75,7 +75,7 @@ if __name__ == '__main__':
 
             rand = np.random.rand()
             if env.change_true == 1:
-                env.change_index = 3
+                env.change_index = 0
                 # if env.cue_position == 'left':
                 #     if rand < env.proportion:
                 #         env.change_index = 0  # Randomly select new Gabor filter for change
@@ -245,7 +245,7 @@ if __name__ == '__main__':
         print('RT', (j, choiceStats[j,4]/n_games))
     
     # Save results
-    output_file = 'ChoiceStats_CueS1100_ChangeS1_alpha1TchangeEqual09_DeltaModulation.npy'
+    output_file = 'Plotting/ChoiceStats_CueS125_ChangeS1_alpha1TchangeEqual10_DeltaModulation.npy'
     np.save(output_file, choiceStats)
     print(f'Results saved to {output_file}')
 
