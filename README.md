@@ -9,8 +9,8 @@ We present a neural network model of visual attention (NNMVA) that integrates bi
 - Recurrent states form the xLSTM interact with QKV components to shape visual attention
 
 ## Setup and Usage
-1. Generate VAE training data by running 'TaskEnvGenData.py'
-2. Train VAE by running 'VAEmain.py' 
-3. Train Agent by running 'main.py' in NNMVWM folder
+1. Generate VAE training data by running 'VAE/TaskEnvGenData.py'
+2. Train VAE by running 'VAE/VAEmain.py'
+3. Train Agent by running 'main.py' in NNMVWM/AddedValues/MemoryAsToken folder
 
 https://arxiv.org/abs/2502.10955
