@@ -10,7 +10,6 @@ The agent trains an Actor-Critic setup with a distributional Bellman update.
 The distribution is discretized into particles, and the Critic outputs
 a probability mass over these particles.
 
-Author: <Your Name / Organization>
 -------------------------------------------------------------------------------
 """
 
