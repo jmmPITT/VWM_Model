@@ -1,8 +1,11 @@
-from buffer import *
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from common.buffer import *
 import torch as T
 import torch.nn.functional as F
 import numpy as np
-from test2 import *
+from common.network_sensor2 import *
 class Agent:
     """Agent implementation for reinforcement learning with distributional RL.
     

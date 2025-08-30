@@ -246,11 +246,11 @@ class ChangeDetectionEnv(gym.Env):
 
 ### Data Collection ###
 ### 10^5 trials, 8 time steps, 4 patches, H=W=25, 1 channel ###
-dataNoise = np.zeros((100000,8, 4, 25, 25, 1))
-dataClean = np.zeros((100000,8, 4, 25, 25, 1))
+dataNoise = np.zeros((1000,8, 4, 25, 25, 1))
+dataClean = np.zeros((1000,8, 4, 25, 25, 1))
 
 trial = 0
-while trial < 100000:
+while trial < 1000:
 
     # Running a trial #
     env = ChangeDetectionEnv()

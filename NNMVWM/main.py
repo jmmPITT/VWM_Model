@@ -15,7 +15,7 @@ import torch as T
 # Local imports (make sure these files/modules are in your Python path)
 from OCDEnv import ChangeDetectionEnv
 from agent import Agent as AgentPlanner
-from VWMNET import TransformerNetwork
+from common.network_sensor2 import TransformerNetwork
 
 
 import sys
@@ -25,7 +25,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Now you can import from the VAE module
-from VAE.VAENetTruncated import VAE
+from common.VAENet import VAE
 
 def softmax(vector: np.ndarray) -> np.ndarray:
     """
@@ -87,7 +87,7 @@ if __name__ == '__main__':
                          n_actions=2)
 
     # Instantiate a TransformerNetwork that will encode the agent state
-    Transformer = TransformerNetwork(lr=0.00001,
+    Transformer = TransformerNetwork(beta=0.00001,
                                      input_dims=input_dim,
                                      hidden_dim=256,
                                      fc1_dims=256,
@@ -100,7 +100,7 @@ if __name__ == '__main__':
     encoder.eval()
 
     # Number of training episodes
-    n_games = 150000
+    n_games = 10
     score_history = []
 
     # Create the environment

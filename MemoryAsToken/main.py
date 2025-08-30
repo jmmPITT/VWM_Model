@@ -10,8 +10,8 @@ from typing import Tuple, Dict
 # Assuming these are your custom module imports
 from OCDEnv import ChangeDetectionEnv
 from agent_planner import Agent as AgentPlanner
-from network_sensor2 import TransformerNetwork
-from VAENet import VAE
+from common.network_sensor2 import TransformerNetwork
+from common.VAENet import VAE
 
 
 def softmax(vector: np.ndarray) -> np.ndarray:

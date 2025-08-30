@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 *.pth
+BigData.h5
+*.npy
+td3_MAT/

@@ -1,6 +1,9 @@
 import numpy as np
 import torch
-from VAENet import VAE  # Import the VAE class from model definition file
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from common.VAENet_full import VAE_full as VAE
 from VAETrainer import VAERunner  # Import the VAERunner class
 import h5py
 
@@ -31,7 +34,8 @@ model = VAE()
 
 # Check if CUDA is available and move the model to GPU if possible
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = load_model('vae_model.pth')
+if os.path.exists('vae_model.pth'):
+    model = load_model('vae_model.pth')
 model.to(device)
 
 
@@ -39,5 +43,5 @@ model.to(device)
 trainer = VAERunner(model, noisy_train_data, clean_train_data, batch_size=100, learning_rate=1e-4)
 
 # Train the model
-trainer.train(epochs=50)
+trainer.train(epochs=1)
 

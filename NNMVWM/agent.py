@@ -13,17 +13,19 @@ a probability mass over these particles.
 -------------------------------------------------------------------------------
 """
 
-import os
 import torch as T
 import torch.nn.functional as F
 import numpy as np
-
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # Local modules (ensure these are in your Python path)
-from VWMNET import ActorNetwork, CriticNetwork, TransformerNetwork
-from buffer import ReplayBuffer
+from common.network_sensor2 import ActorNetwork, CriticNetwork, TransformerNetwork
+from common.buffer import ReplayBuffer
+from common.agent_planner import Agent as BaseAgent
 
 
-class Agent:
+class Agent(BaseAgent):
     """
     The Agent class handles:
       1. Storage of transitions in a replay buffer (PER).
@@ -31,21 +33,6 @@ class Agent:
       3. Critic updates via distributional RL.
       4. Target networks and soft parameter updates.
       5. Optionally integrates a Transformer state encoding.
-
-    :param alpha: Learning rate for the actor.
-    :param beta: Learning rate for the critic.
-    :param input_dims: Dimension of input state (flattened obs or encoded).
-    :param tau: Polyak averaging coefficient for target network updates.
-    :param env: Environment placeholder or reference (not used directly here).
-    :param gamma: Discount factor.
-    :param update_actor_interval: Update frequency for actor relative to critic.
-    :param warmup: Number of timesteps to use random actions before learning.
-    :param n_actions: Number of discrete actions.
-    :param max_size: Maximum size of replay buffer.
-    :param layer1_size: Not directly used here.
-    :param layer2_size: Not directly used here.
-    :param batch_size: Mini-batch size for learning.
-    :param noise: Standard deviation of noise added to actions (exploration).
     """
 
     def __init__(
@@ -63,77 +50,44 @@ class Agent:
             layer1_size=64,
             layer2_size=32,
             batch_size=100,
-            noise=0.01
+            noise=0.01,
+            num_particles: int = 10,
+            actor_fc1_dims: int = 64,
+            actor_fc2_dims: int = 32,
+            actor_hidden_dims: int = 128,
+            critic_fc1_dims: int = 128,
+            critic_fc2_dims: int = 64,
+            critic_hidden_dims: int = 256
     ):
-        # Hyperparameters
-        self.gamma = gamma
-        self.tau = tau
-        self.n_actions = n_actions
-        self.batch_size = batch_size
-        self.learn_step_cntr = 0
-        self.time_step = 0
-        self.update_actor_iter = update_actor_interval
-        self.warmup = warmup
-        self.noise = noise
-
-        # Replay buffer (Prioritized Experience Replay)
-        self.memory = ReplayBuffer(max_size, input_dims, n_actions)
-
-        # Device setup
-        self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
-
-        # Distributional RL setup
-        self.num_particles = 10      # Number of particles for distribution
-        self.V_max = 1               # Maximum possible return
-        self.particles = [
-            i * (self.V_max / (self.num_particles - 1))
-            for i in range(self.num_particles)
-        ]
-        print("Particles:", self.particles)
-
-        self.spacing = self.particles[1] - self.particles[0]
-        print('Particle spacing:', self.spacing)
-        self.eta = 1.0               # Temperature-like parameter
-
-        # Actor-Critic networks
-        self.actor = ActorNetwork(alpha, input_dims=input_dims,
-                                  hidden_dim=128, fc1_dims=64, fc2_dims=32,
-                                  n_actions=n_actions,
-                                  name='actor_planner', chkpt_dir='td3_MAT'
-                                  ).to(self.device)
-
-        self.critic_1 = CriticNetwork(beta, input_dims=input_dims,
-                                      hidden_dim=256, fc1_dims=128,
-                                      fc2_dims=64, n_actions=n_actions,
-                                      name='critic_1_planner',
-                                      chkpt_dir='td3_MAT').to(self.device)
-
-        # Target networks
-        self.target_actor = ActorNetwork(alpha, input_dims=input_dims,
-                                         hidden_dim=128, fc1_dims=64,
-                                         fc2_dims=32, n_actions=n_actions,
-                                         name='target_actor_planner',
-                                         chkpt_dir='td3_MAT').to(self.device)
-
-        self.target_critic_1 = CriticNetwork(beta, input_dims=input_dims,
-                                             hidden_dim=256, fc1_dims=128,
-                                             fc2_dims=64, n_actions=n_actions,
-                                             name='target_critic_1_planner',
-                                             chkpt_dir='td3_MAT').to(self.device)
-
-        # Initialize target networks to match current networks
-        self.update_network_parameters(tau=1.0)
+        super().__init__(
+            alpha=alpha,
+            beta=beta,
+            input_dims=input_dims,
+            tau=tau,
+            n_actions=n_actions,
+            gamma=gamma,
+            max_buffer_size=max_size,
+            batch_size=batch_size,
+            update_actor_interval=update_actor_interval,
+            warmup_steps=warmup,
+            noise=noise,
+            num_particles=num_particles,
+            actor_fc1_dims=actor_fc1_dims,
+            actor_fc2_dims=actor_fc2_dims,
+            actor_hidden_dims=actor_hidden_dims,
+            critic_fc1_dims=critic_fc1_dims,
+            critic_fc2_dims=critic_fc2_dims,
+            critic_hidden_dims=critic_hidden_dims
+        )
+        # The env parameter is not used in the base class, so we don't pass it.
+        # The layer1_size and layer2_size parameters are not used in the base class.
 
     def choose_action(self, transformer_state, obs):
         """
         Choose an action given the current state encoding from the Transformer
         (optional) and the raw observation or additional embedding.
-
-        :param transformer_state: Output from Transformer (or direct observation).
-        :param obs: Observation or additional state data.
-        :return: Numpy array of action probabilities (softmax).
         """
-        if self.time_step < self.warmup * 0:
+        if self.time_step < self.warmup_steps * 0:
             # Random exploration (currently set with warmup * 0, effectively off)
             print(self.time_step, self.warmup * 1)
             mu = T.tensor(np.random.normal(scale=self.noise,
@@ -151,34 +105,9 @@ class Agent:
         self.time_step += 1
         return mu.cpu().detach().numpy()
 
-    def remember(self, state, mask, action, reward, new_state, next_mask, done, t):
-        """
-        Store a transition in the replay buffer.
-
-        :param state: Current state.
-        :param mask: Current mask (for partial obs or sequence).
-        :param action: Action taken.
-        :param reward: Reward received.
-        :param new_state: Next state.
-        :param next_mask: Next mask (for partial obs or sequence).
-        :param done: Episode done flag.
-        :param t: Current timestep or index in the episode.
-        """
-        self.memory.store_transition(
-            state, mask, action, reward, new_state, next_mask, done, t
-        )
-
     def learn(self, Transformer):
         """
         Perform one learning step (Critic and possibly Actor update):
-          1. Sample from replay buffer.
-          2. Compute target distribution over next states (distributional RL).
-          3. Compute Critic loss as KL divergence + distributional constraints.
-          4. Compute policy loss from distribution (softmax exponentiated Q).
-          5. Update networks.
-
-        :param Transformer: A TransformerNetwork instance used for state enc.
-        :return: Updated Transformer model (because it's also trained here).
         """
         # Check if we have enough samples
         if self.memory.mem_cntr < self.batch_size:
@@ -292,49 +221,3 @@ class Agent:
         self.learn_step_cntr += 1
         self.update_network_parameters()
         return Transformer
-
-    def update_network_parameters(self, tau=None):
-        """
-        Soft-update (Polyak averaging) of target networks.
-
-        :param tau: If None, use self.tau. If =1, copy weights directly.
-        """
-        if tau is None:
-            tau = self.tau
-
-        # Pull network parameter dictionaries
-        actor_params = dict(self.actor.named_parameters())
-        critic_1_params = dict(self.critic_1.named_parameters())
-        target_actor_params = dict(self.target_actor.named_parameters())
-        target_critic_1_params = dict(self.target_critic_1.named_parameters())
-
-        # Update critic_1 target
-        for name in critic_1_params:
-            critic_1_params[name] = tau * critic_1_params[name].clone() + \
-                (1 - tau) * target_critic_1_params[name].clone()
-
-        # Update actor target
-        for name in actor_params:
-            actor_params[name] = tau * actor_params[name].clone() + \
-                (1 - tau) * target_actor_params[name].clone()
-
-        self.target_critic_1.load_state_dict(critic_1_params)
-        self.target_actor.load_state_dict(actor_params)
-
-    def save_models(self):
-        """
-        Save checkpoints for actor, target_actor, critic_1, target_critic_1.
-        """
-        self.actor.save_checkpoint()
-        self.target_actor.save_checkpoint()
-        self.critic_1.save_checkpoint()
-        self.target_critic_1.save_checkpoint()
-
-    def load_models(self):
-        """
-        Load checkpoints for actor, target_actor, critic_1, target_critic_1.
-        """
-        self.actor.load_checkpoint()
-        self.target_actor.load_checkpoint()
-        self.critic_1.load_checkpoint()
-        self.target_critic_1.load_checkpoint()
